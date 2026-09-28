@@ -18,17 +18,6 @@ defaultConfig {
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 }
 
-defaultConfig {
-    applicationId = "com.example.ta1eeiproject"
-    minSdk = 28
-    targetSdk = 35
-    versionCode = 1
-    versionName = "1.0"
-
-    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-}
-
-
 
     buildTypes {
         release {
