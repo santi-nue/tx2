@@ -3,87 +3,116 @@ name: Build Android WebView APK (Debug)
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v6
-      with:
-        java-version: '21'
-        distribution: 'temurin'
+      - name: Set up Java 17
+        uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '17'
 
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v4
-      with:
-        packages: 'platform-tools emulator'
-    
-    - name: Setup Gradle
-      uses: gradle/gradle-build-action@v2
-      with:
-        gradle-version: 8.2
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
 
-    - name: Verify project structure
-      run: |
-        echo "=== Project Structure ==="
-        ls -la
-        echo ""
-        echo "=== App Directory ==="
-        ls -la app/
+      - name: Set up Gradle without cache
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-disabled: true
 
-    - name: Build Release APK
-      run: |
-        echo "Starting Gradle Release build..."
-        gradle assembleDebug --stacktrace
-        echo "Build completed"
+      - name: Make Gradle Wrapper executable
+        run: chmod +x ./gradlew
 
-    - name: Verify APK
-      run: |
-        echo "=== APK Output ==="
-        ls -la app/build/outputs/apk/debug/
-        echo ""
-        echo "=== APK Info ==="
-        ls -lh app/build/outputs/apk/debug/*.apk
+      - name: Verify project structure
+        run: |
+          echo "=== Project Structure ==="
+          ls -la
 
-    - name: Upload APK as Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: WebViewApp-Release-APK
-        path: app/build/outputs/apk/debug/app-debug.apk
-        retention-days: 90
+          echo "=== App Directory ==="
+          ls -la app/
 
-    - name: Rename APK for Release
-      run: |
-        cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/WebViewApp-debug.apk
+      - name: Clear Gradle and project caches
+        run: |
+          ./gradlew --stop || true
 
-    - name: Create/Update GitHub Release
-      uses: ncipollo/release-action@v1
-      with:
-        artifacts: "app/build/outputs/apk/debug/WebViewApp-debug.apk"
-        tag: "v1.0.0"
-        name: "WebView App v1.0.0 (debug)"
-        body: |
-          🚀 Android WebView Scaffold App (debug Build)
+          rm -rf "$HOME/.gradle/caches"
+          rm -rf "$HOME/.gradle/wrapper"
 
-          ✨ Features:
-          - Full WebView support
-          - JavaScript enabled
-          - File upload/download support
-          - Camera, microphone, location permissions
-          - Pull-to-refresh
-          - Back button navigation
-          - App cache enabled
+          rm -rf .gradle
+          rm -rf build
+          rm -rf app/build
 
-          📖 To customize: Edit `TARGET_URL` in MainActivity.kt
+      - name: Show Java and Gradle versions
+        run: |
+          java -version
+          ./gradlew --version
 
-          ⚠️ Note: This is an unsigned debug APK. For production distribution, 
-          consider signing the APK with your own keystore.
-        token: ${{ secrets.GITHUB_TOKEN }}
-        allowUpdates: true
-        replacesArtifacts: true
+      - name: Accept Android SDK licenses
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+
+      - name: Build Debug APK
+        run: |
+          ./gradlew clean assembleDebug \
+            --refresh-dependencies \
+            --no-build-cache \
+            --stacktrace
+
+      - name: Verify APK
+        run: |
+          echo "=== APK Output ==="
+          ls -la app/build/outputs/apk/debug/
+
+          echo "=== APK Info ==="
+          ls -lh app/build/outputs/apk/debug/*.apk
+
+      - name: Rename APK
+        run: |
+          cp \
+            app/build/outputs/apk/debug/app-debug.apk \
+            app/build/outputs/apk/debug/WebViewApp-debug.apk
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WebViewApp-debug-APK
+          path: app/build/outputs/apk/debug/WebViewApp-debug.apk
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Create or update GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: app/build/outputs/apk/debug/WebViewApp-debug.apk
+          tag: v1.0.0
+          name: WebView App v1.0.0 (debug)
+          allowUpdates: true
+          replacesArtifacts: true
+          removeArtifacts: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+          body: |
+            🚀 Android WebView Scaffold App (debug build)
+
+            Features:
+            - Full WebView support
+            - JavaScript enabled
+            - File upload/download support
+            - Camera, microphone, and location permissions
+            - Pull-to-refresh
+            - Back button navigation
+            - App cache enabled
+
+            To customize:
+            Edit TARGET_URL in MainActivity.kt.
+
+            ⚠️ This is an unsigned debug APK intended for testing.
